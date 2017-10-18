@@ -83,8 +83,13 @@ static struct mem_t *mem = NULL;
 /* track number of insn and refs */
 static counter_t sim_num_refs = 0;
 
+static counter_t sim_icache_cycles = 0;
+
 /* maximum number of inst's to execute */
 static unsigned int max_insts;
+
+//INSERT FROM ASSIGNMENT 2
+static unsigned int icache_size;
 
 /* level 1 instruction cache, entry level instruction cache */
 static struct cache_t *cache_il1 = NULL;
@@ -162,6 +167,11 @@ il1_access_fn(enum mem_cmd cmd,		/* access cmd, Read or Write */
 	      struct cache_blk_t *blk,	/* ptr to block in upper level */
 	      tick_t now)		/* time of access */
 {
+  if(icache_size == 4096) {
+    sim_icache_cycles += 13;
+  } else {
+    sim_icache_cycles += 16;
+  }
   if (cache_il2)
     {
       /* access next level of inst cache hierarchy */
@@ -291,6 +301,11 @@ sim_reg_options(struct opt_odb_t *odb)	/* options database */
   opt_reg_string(odb, "-cache:il1",
 		 "l1 inst cache config, i.e., {<config>|dl1|dl2|none}",
 		 &cache_il1_opt, "il1:256:32:1:l", /* print */TRUE, NULL);
+  // INSERT FROM LAB 2
+  opt_reg_uint(odb, "-icache_size:bytes",
+		 "size of instruction cache 1. ",
+		 &icache_size, 4096, /* print */TRUE, NULL);
+  // END INSERT
   opt_reg_note(odb,
 "  Cache levels can be unified by pointing a level of the instruction cache\n"
 "  hierarchy at the data cache hiearchy using the \"dl1\" and \"dl2\" cache\n"
@@ -518,6 +533,9 @@ sim_reg_stats(struct stat_sdb_t *sdb)	/* stats database */
   stat_reg_counter(sdb, "sim_num_insn",
 		   "total number of instructions executed",
 		   &sim_num_insn, sim_num_insn, NULL);
+  stat_reg_counter(sdb, "sim_icache_cycles",
+		   "total number of instruction cache cycles",
+		   &sim_icache_cycles, sim_icache_cycles, NULL);
   stat_reg_counter(sdb, "sim_num_refs",
 		   "total number of loads and stores executed",
 		   &sim_num_refs, 0, NULL);
@@ -527,6 +545,10 @@ sim_reg_stats(struct stat_sdb_t *sdb)	/* stats database */
   stat_reg_formula(sdb, "sim_inst_rate",
 		   "simulation speed (in insts/sec)",
 		   "sim_num_insn / sim_elapsed_time", NULL);
+
+  stat_reg_formula(sdb, "sim_icache_cpi",
+		   "icache CPI",
+		   "sim_icache_cycles / sim_num_insn", NULL);
 
   /* register cache stats */
   if (cache_il1
@@ -754,9 +776,15 @@ sim_main(void)
       if (itlb)
 	cache_access(itlb, Read, IACOMPRESS(regs.regs_PC),
 		     NULL, ISCOMPRESS(sizeof(md_inst_t)), 0, NULL, NULL);
-      if (cache_il1)
+      if (cache_il1) {
+        if(icache_size == 4096) {
+          sim_icache_cycles += 2;
+        } else {
+          sim_icache_cycles += 4;
+        }
 	cache_access(cache_il1, Read, IACOMPRESS(regs.regs_PC),
 		     NULL, ISCOMPRESS(sizeof(md_inst_t)), 0, NULL, NULL);
+      }
       MD_FETCH_INST(inst, mem, regs.regs_PC);
 
       /* keep an instruction count */
